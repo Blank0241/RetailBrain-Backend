@@ -5,7 +5,7 @@ import { AppError } from '../middleware/errorMiddleware.js';
 import { env } from '../config/env.js';
 import { predict } from './mlService.js';
 
-const SALT_ROUNDS = 12;
+const SALT_ROUNDS = 10;
 
 // export async function registerUser({ name, email, password }) {
 //   const existing = await User.findOne({ email: email.toLowerCase() });
