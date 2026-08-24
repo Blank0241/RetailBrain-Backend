@@ -7,14 +7,42 @@ import { predict } from './mlService.js';
 
 const SALT_ROUNDS = 12;
 
+// export async function registerUser({ name, email, password }) {
+//   const existing = await User.findOne({ email: email.toLowerCase() });
+//   if (existing) {
+//     throw new AppError(409, 'EMAIL_IN_USE', 'An account with that email already exists.');
+//   }
+
+//   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+//   const user = await User.create({ name, email, passwordHash });
+//   return user;
+// }
+
 export async function registerUser({ name, email, password }) {
+  console.time('[register] TOTAL');
+
+  console.time('[register] find existing user');
   const existing = await User.findOne({ email: email.toLowerCase() });
+  console.timeEnd('[register] find existing user');
+
   if (existing) {
-    throw new AppError(409, 'EMAIL_IN_USE', 'An account with that email already exists.');
+    throw new AppError(
+      409,
+      'EMAIL_IN_USE',
+      'An account with that email already exists.'
+    );
   }
 
+  console.time('[register] bcrypt hash');
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  console.timeEnd('[register] bcrypt hash');
+
+  console.time('[register] create user');
   const user = await User.create({ name, email, passwordHash });
+  console.timeEnd('[register] create user');
+
+  console.timeEnd('[register] TOTAL');
+
   return user;
 }
 
