@@ -21,12 +21,14 @@ export function createApp() {
   app.set('trust proxy', 1); // needed for secure cookies behind a proxy/load balancer
 
   app.use(helmet());
+
   app.use(
     cors({
-      origin: env.frontendUrl,
-      credentials: true, // required so the browser sends/receives the httpOnly auth cookie
-    })
+     origin: env.frontendUrl,
+     credentials: true, // required so the browser sends/receives the httpOnly auth cookie
+   })
   );
+  
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
   app.use(mongoSanitize()); // strips $ / . operators from req.body/query/params to prevent NoSQL injection

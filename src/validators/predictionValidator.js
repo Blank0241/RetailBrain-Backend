@@ -8,27 +8,14 @@ export const objectIdParamSchema = z.object({
 });
 
 // Mirrors PREDICTION_FORM_CONFIG in the frontend's src/data/mockData.js.
-// Kept intentionally permissive on unknown-but-harmless extra keys (the
-// frontend config can grow new ML input fields) while still enforcing types
-// and bounds on the fields the mock model / UI actually depend on.
+// The real Random Forest model's 19 features are derived server-side (see
+// mlService.js) from the customer/item pair — they are never accepted
+// directly from the client, so this schema only validates the two
+// identifiers the Predict page actually collects.
 export const predictionInputSchema = z.object({
   customerId: z.string().trim().min(1).max(60),
-  age: z.number().min(18).max(100),
-  gender: z.enum(['Male', 'Female', 'Other']),
-  location: z.string().trim().min(1).max(100),
-  segment: z.string().trim().min(1).max(60),
-  productCategory: z.string().trim().min(1).max(100),
-  orderValue: z.number().min(0),
-  quantity: z.number().min(1),
-  discount: z.number().min(0).max(100).optional().default(0),
-  paymentMethod: z.string().trim().min(1).max(60),
-  shippingMethod: z.string().trim().min(1).max(60),
-  previousOrders: z.number().min(0),
-  previousSpending: z.number().min(0),
-  avgOrderValue: z.number().min(0),
-  returnCount: z.number().min(0).optional().default(0),
-  customerTenure: z.number().min(0),
-}).passthrough();
+  itemId: z.string().trim().min(1).max(60),
+});
 
 export const createPredictionSchema = z.object({
   inputData: predictionInputSchema,

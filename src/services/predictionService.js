@@ -1,14 +1,19 @@
 import mongoose from 'mongoose';
 import Prediction, { PREDICTION_LABELS } from '../models/Prediction.js';
 import { AppError } from '../middleware/errorMiddleware.js';
-import { predict } from './mlService.js';
+import { predictPurchaseForCustomerItem } from './mlService.js';
 
 export async function createPrediction(userId, inputData) {
-  const { prediction, confidence } = await predict(inputData);
+  const { customerId, itemId } = inputData;
+
+  // Throws (currently always, until real feature lookup is wired in — see
+  // mlService.deriveFeaturesForCustomerItem) rather than ever fabricating a
+  // prediction, so no Prediction document is created below on failure.
+  const { prediction, confidence } = await predictPurchaseForCustomerItem(customerId, itemId);
 
   const doc = await Prediction.create({
     userId,
-    customer: inputData.customerId || 'Unknown Customer',
+    customer: customerId || 'Unknown Customer',
     inputData,
     prediction,
     confidence,
