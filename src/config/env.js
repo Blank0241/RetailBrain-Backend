@@ -24,5 +24,7 @@ export const env = {
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
   crossSiteCookies: process.env.CROSS_SITE_COOKIES === 'true',
 
+  mlServiceUrl: process.env.ML_SERVICE_URL || 'http://127.0.0.1:8000',
+  
   demoUserPassword: process.env.DEMO_USER_PASSWORD || 'demo-password-not-used-for-login',
 };

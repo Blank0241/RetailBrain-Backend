@@ -1,6 +1,8 @@
 import { AppError } from '../middleware/errorMiddleware.js';
-import { PREDICTION_LABELS } from '../models/Prediction.js';
+import { env } from '../config/env.js';
 
+import { PREDICTION_LABELS } from '../models/Prediction.js';
+import CustomerItemFeature from '../models/CustomerItemFeature.js';
 /**
  * ============================================================================
  * LEGACY DEMO-SEEDING MOCK — UNRELATED TO THE REAL PREDICT WORKFLOW
@@ -72,6 +74,74 @@ export const REQUIRED_FEATURES = [
 export const SELECTED_THRESHOLD = 0.42;
 
 /**
+ * Calls the Python FastAPI ML service.
+ *
+ * Node does not load the .pkl file directly.
+ * Python owns the scikit-learn model and inference.
+ */
+export async function callRandomForestModel(features) {
+  try {
+    const response = await fetch(`${env.mlServiceUrl}/predict`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(features),
+    });
+
+    if (!response.ok) {
+      let detail = 'ML service prediction failed.';
+
+      try {
+        const errorBody = await response.json();
+
+        if (errorBody?.detail) {
+          detail =
+            typeof errorBody.detail === 'string'
+              ? errorBody.detail
+              : JSON.stringify(errorBody.detail);
+        }
+      } catch {
+        // Keep the default error message if the ML service did not
+        // return valid JSON.
+      }
+
+      throw new AppError(
+        502,
+        'ML_SERVICE_ERROR',
+        detail
+      );
+    }
+
+    const result = await response.json();
+
+    if (
+      typeof result.purchase_probability !== 'number' ||
+      typeof result.prediction !== 'number' ||
+      typeof result.threshold !== 'number'
+    ) {
+      throw new AppError(
+        502,
+        'INVALID_ML_RESPONSE',
+        'ML service returned an invalid prediction response.'
+      );
+    }
+
+    return result;
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    throw new AppError(
+      503,
+      'ML_SERVICE_UNAVAILABLE',
+      'The ML prediction service is currently unavailable.'
+    );
+  }
+}
+
+/**
  * NOT YET IMPLEMENTED — intentionally.
  *
  * This is where the 19 real feature values for a given (customerId, itemId)
@@ -93,16 +163,39 @@ export const SELECTED_THRESHOLD = 0.42;
  *      returning an object with exactly the 19 keys in REQUIRED_FEATURES.
  */
 export async function deriveFeaturesForCustomerItem(customerId, itemId) {
-  throw new AppError(
-    501,
-    'FEATURE_LOOKUP_NOT_IMPLEMENTED',
-    'Prediction is not available yet for this customer/product pair: no real ' +
-      'interaction-history data source is wired in. The Random Forest model ' +
-      'needs 19 real historical features per customer/product pair, and only ' +
-      'the raw training dataset exists today (not a live lookup table). ' +
-      'Connect a real interaction-history data source before predictions can run.',
-    { customerId, itemId, requiredFeatures: REQUIRED_FEATURES }
-  );
+  const featureRecord = await CustomerItemFeature.findOne({
+    customerId: String(customerId),
+    itemId: String(itemId),
+  }).lean();
+
+  if (!featureRecord) {
+    throw new AppError(
+      404,
+      'FEATURES_NOT_FOUND',
+      'No historical features found for this customer/product pair.',
+      { customerId, itemId }
+    );
+  }
+
+  const features = {};
+
+  for (const featureName of REQUIRED_FEATURES) {
+    if (
+      featureRecord[featureName] === undefined ||
+      featureRecord[featureName] === null
+    ) {
+      throw new AppError(
+        500,
+        'FEATURES_INCOMPLETE',
+        `Missing required feature: ${featureName}`,
+        { customerId, itemId, featureName }
+      );
+    }
+
+    features[featureName] = featureRecord[featureName];
+  }
+
+  return features;
 }
 
 /**
@@ -116,22 +209,28 @@ export async function deriveFeaturesForCustomerItem(customerId, itemId) {
  * the app (Prediction model, PredictionResult, PredictionTable, etc.) already
  * expects — so no other file needs to change once this is completed.
  */
+
 export async function predictPurchaseForCustomerItem(customerId, itemId) {
   const features = await deriveFeaturesForCustomerItem(customerId, itemId);
 
-  // --- Wire the real model call in here once features are real -------------
-  // const { purchase_probability, prediction, threshold } =
-  //   await callRandomForestModel(features); // e.g. HTTP call to a Python
-  //                                           // service wrapping predict_purchase.py
-  //
-  // return {
-  //   prediction: prediction === 1 ? PREDICTION_LABELS[0] : PREDICTION_LABELS[1],
-  //   confidence: Math.round(purchase_probability * 100),
-  //   purchaseProbability: purchase_probability,
-  //   threshold,
-  //   isMock: false,
-  // };
-  // ---------------------------------------------------------------------------
+  const {
+    purchase_probability,
+    prediction,
+    threshold,
+  } = await callRandomForestModel(features);
 
-  return features; // unreachable until deriveFeaturesForCustomerItem is implemented
+  return {
+    prediction:
+      prediction === 1
+        ? PREDICTION_LABELS[0]
+        : PREDICTION_LABELS[1],
+
+    confidence: Math.round(purchase_probability * 100),
+
+    purchaseProbability: purchase_probability,
+
+    threshold,
+
+    isMock: false,
+  };
 }
